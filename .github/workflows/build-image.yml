@@ -1,0 +1,49 @@
+# .github/workflows/build-image.yml
+name: Build gbOS86 image
+
+on:
+  workflow_dispatch:
+    inputs:
+      retention_days:
+        description: "Artifact retention (days)"
+        default: "1"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: ./build.sh -y
+
+      - name: Verify image against build's own checksum
+        run: |
+          df -h /
+          ls -lh dist
+          cd dist && sha256sum -c gbOS86-*.img.sha256
+
+      # One artifact: the flashable image plus its SHA256SUMS. The image holds
+      # Google's proprietary OS — personal use, no Releases, no sharing.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gbOS86
+          path: |
+            dist/gbOS86-*.img
+            dist/gbOS86-*.img.sha256
+          compression-level: 0
+          retention-days: ${{ inputs.retention_days }}
+          if-no-files-found: error
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### gbOS86 build"
+            echo '```'
+            ls -lh dist 2>/dev/null || echo "no image produced"
+            df -h / | tail -1
+            echo '```'
+            echo "Verify: \`sha256sum -c gbOS86-*.img.sha256\`. Flash the .img to a USB stick of 8 GB or more (balenaEtcher, Rufus, or dd), then boot it (F12)."
+          } >> "$GITHUB_STEP_SUMMARY"
